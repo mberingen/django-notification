@@ -10,6 +10,7 @@ from django.db.models.query import QuerySet
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.core.mail import send_mail
+from django.core.mail import EmailMultiAlternatives
 from django.core.urlresolvers import reverse
 from django.template import Context
 from django.template.loader import render_to_string
@@ -285,7 +286,7 @@ def send_now(users, label, extra_context=None, on_site=True, sender=None):
         "full.txt",
         "notice.html",
         "full.html",
-    ) # TODO make formats configurable
+    )  # TODO make formats configurable
 
     for user in users:
         recipients = []
@@ -322,11 +323,20 @@ def send_now(users, label, extra_context=None, on_site=True, sender=None):
             "message": messages["full.txt"],
         }, context)
 
-        notice = Notice.objects.create(recipient=user, message=messages["notice.html"],
-            notice_type=notice_type, on_site=on_site, sender=sender)
-        if should_send(user, notice_type, "1") and user.email and user.is_active: # Email
+        if(messages['full.html']):
+            html_body = render_to_string('notification/email_body.html', {
+                'message': messages['full.html'],
+            }, context)
+
+        Notice.objects.create(recipient=user, message=messages["notice.html"],
+                              notice_type=notice_type, on_site=on_site, sender=sender)
+
+        if should_send(user, notice_type, "1") and user.email and user.is_active:  # Email
             recipients.append(user.email)
-        send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, recipients)
+
+        msg = EmailMultiAlternatives(subject, body, settings.DEFAULT_FROM_EMAIL, recipients)
+        msg.attach_alternative(html_body, "text/html")
+        msg.send()
 
     # reset environment to original language
     activate(current_language)
